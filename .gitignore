@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.venv312/
+# Frontend
+node_modules/
+frontend/dist/
+
+# Local data, indexes, logs and generated files
+data/processed/*
+!data/processed/.gitkeep
+storage/*
+!storage/.gitkeep
+*.faiss
+*.index
+*.log
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# User-uploaded documents (keep local; do not commit)
+data/sample_documents/*
+!data/sample_documents/.gitkeep

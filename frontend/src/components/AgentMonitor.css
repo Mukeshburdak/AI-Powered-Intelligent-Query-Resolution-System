@@ -1,0 +1,145 @@
+.agent-monitor {
+    width: 100%;
+    margin: 18px 0;
+    padding: 18px;
+    border: 1px solid #303846;
+    border-radius: 12px;
+    background: #151b26;
+    color: #f1f5f9;
+}
+
+.agent-monitor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.agent-monitor-header h3 {
+    margin: 0;
+    font-size: 17px;
+}
+
+.agent-monitor-header p {
+    margin: 5px 0 0;
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+.agent-summary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.agent-summary strong {
+    font-size: 20px;
+}
+
+.agent-summary small {
+    color: #94a3b8;
+}
+
+.agent-progress {
+    height: 6px;
+    overflow: hidden;
+    border-radius: 10px;
+    background: #303846;
+    margin-bottom: 16px;
+}
+
+.agent-progress-fill {
+    height: 100%;
+    background: #38bdf8;
+    transition: width 0.3s ease;
+}
+
+.agent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.agent-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid #303846;
+    border-radius: 9px;
+    background: #1c2533;
+}
+
+.agent-icon {
+    font-size: 22px;
+}
+
+.agent-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.agent-info strong {
+    display: block;
+    font-size: 13px;
+}
+
+.agent-info small {
+    display: block;
+    margin-top: 4px;
+    color: #94a3b8;
+    font-size: 11px;
+}
+
+.agent-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #94a3b8;
+}
+
+.agent-status.completed .status-dot {
+    background: #22c55e;
+}
+
+.agent-status.completed_no_history .status-dot {
+    background: #38bdf8;
+}
+
+.agent-status.running .status-dot {
+    background: #eab308;
+}
+
+.agent-status.error .status-dot {
+    background: #ef4444;
+}
+
+.agent-monitor-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #303846;
+    color: #94a3b8;
+    font-size: 11px;
+}
+
+@media (max-width: 600px) {
+    .agent-item {
+        flex-wrap: wrap;
+    }
+
+    .agent-status {
+        margin-left: 34px;
+    }
+}
