@@ -1,6 +1,5 @@
 
 import json
-from pathlib import Path
 
 import faiss
 import numpy as np
@@ -11,8 +10,7 @@ from backend.embeddings.embedding_service import (
 )
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-STORAGE_DIR = PROJECT_ROOT / "storage"
+from backend.config import STORAGE_DIR
 
 INDEX_PATH = STORAGE_DIR / "faiss.index"
 METADATA_PATH = STORAGE_DIR / "chunk_metadata.json"

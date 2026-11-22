@@ -1,12 +1,12 @@
 
 import os
-from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DB = PROJECT_ROOT / "storage" / "app.db"
+from backend.config import STORAGE_DIR
+
+DEFAULT_DB = STORAGE_DIR / "app.db"
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
