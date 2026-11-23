@@ -41,6 +41,12 @@ def test_model_unavailable_returns_sources(monkeypatch):
         "Gemini is unavailable"
     )
 
+    # Simulate Groq being unavailable too.
+    def fail_groq(prompt, system_instruction):
+        raise RuntimeError("Groq is unavailable")
+
+    monkeypatch.setattr(agent, "_generate_groq", fail_groq)
+
     sources = [
         {
             "source": "sample.txt",
@@ -60,4 +66,4 @@ def test_model_unavailable_returns_sources(monkeypatch):
     assert result["sources"][0]["chunk_id"] == "sample_0000"
     assert result["confidence"] == 0.0
     assert result["provider"] == "Gemini"
-    assert "Gemini is unavailable" in result["generation_error"]
+    assert "Groq is unavailable" in result["generation_error"]

@@ -9,7 +9,6 @@ from backend.embeddings.embedding_service import (
     embed_texts,
 )
 
-
 from backend.config import STORAGE_DIR
 
 INDEX_PATH = STORAGE_DIR / "faiss.index"
@@ -57,6 +56,37 @@ class FaissVectorStore:
             encoding="utf-8",
         )
 
+    def _rebuild_index(self):
+        """Rebuild the index using the current embedding model."""
+
+        if not self.metadata:
+            self.index = None
+            return
+
+        vectors = embed_texts(
+            [item["text"] for item in self.metadata]
+        )
+
+        if (
+            vectors.ndim != 2
+            or vectors.shape[0] != len(self.metadata)
+            or vectors.shape[1] == 0
+        ):
+            raise ValueError(
+                "Invalid embeddings returned while rebuilding FAISS index."
+            )
+
+        vectors = np.ascontiguousarray(
+            vectors,
+            dtype=np.float32,
+        )
+
+        new_index = faiss.IndexFlatIP(vectors.shape[1])
+        new_index.add(vectors)
+
+        self.index = new_index
+        self._save()
+
     def add_chunks(self, chunks: list[dict]) -> int:
         """Add chunks while preserving their user ownership."""
 
@@ -95,18 +125,7 @@ class FaissVectorStore:
 
         self.metadata = list(merged.values())
 
-        vectors = embed_texts(
-            [item["text"] for item in self.metadata]
-        )
-
-        dimension = vectors.shape[1]
-        self.index = faiss.IndexFlatIP(dimension)
-
-        self.index.add(
-            np.ascontiguousarray(vectors, dtype=np.float32)
-        )
-
-        self._save()
+        self._rebuild_index()
 
         return len(valid_chunks)
 
@@ -135,6 +154,18 @@ class FaissVectorStore:
             return []
 
         query_vector = embed_query(query)
+
+        if query_vector.ndim != 2 or query_vector.shape[0] != 1:
+            raise ValueError(
+                "Query embedding must contain exactly one vector."
+            )
+
+        # Automatically migrate an old index when dimensions differ.
+        if self.index.d != query_vector.shape[1]:
+            self._rebuild_index()
+
+            if self.index is None or self.index.ntotal == 0:
+                return []
 
         scores, positions = self.index.search(
             np.ascontiguousarray(

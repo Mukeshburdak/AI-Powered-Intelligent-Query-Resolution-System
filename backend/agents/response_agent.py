@@ -5,6 +5,7 @@ import logging
 
 from google import genai
 from google.genai import types, errors
+from openai import OpenAI
 
 
 logger = logging.getLogger(__name__)
@@ -13,19 +14,114 @@ logger = logging.getLogger(__name__)
 class ResponseAgent:
 
     def __init__(self):
+        # Primary provider: Gemini
         self.model = os.getenv(
             "GEMINI_MODEL",
             "gemini-2.5-flash"
         )
 
-        api_key = os.getenv("GEMINI_API_KEY")
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
 
-        if not api_key:
+        if not gemini_api_key:
             raise RuntimeError(
                 "GEMINI_API_KEY is missing from environment."
             )
 
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(api_key=gemini_api_key)
+
+        # Fallback provider: Groq
+        self.groq_model = os.getenv(
+            "GROQ_MODEL",
+            "openai/gpt-oss-20b"
+        )
+
+        groq_api_key = os.getenv("GROQ_API_KEY")
+
+        self.groq_client = (
+            OpenAI(
+                api_key=groq_api_key,
+                base_url="https://api.groq.com/openai/v1",
+                timeout=30.0,
+            )
+            if groq_api_key
+            else None
+        )
+
+        if not self.groq_client:
+            logger.warning(
+                "GROQ_API_KEY is missing. Groq fallback is disabled."
+            )
+
+    def _generate_gemini(self, prompt, system_instruction):
+        # Retry temporary Gemini server failures.
+        for attempt in range(3):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        temperature=0.2,
+                        max_output_tokens=1024,
+                    ),
+                )
+
+                answer = (response.text or "").strip()
+
+                if not answer:
+                    raise ValueError(
+                        "Gemini returned an empty response."
+                    )
+
+                return answer
+
+            except errors.ServerError:
+                if attempt == 2:
+                    raise
+
+                wait_seconds = 2 ** (attempt + 1)
+
+                logger.warning(
+                    "Gemini server unavailable. "
+                    "Retrying in %s seconds (attempt %s/3).",
+                    wait_seconds,
+                    attempt + 1,
+                )
+
+                time.sleep(wait_seconds)
+
+    def _generate_groq(self, prompt, system_instruction):
+        if not self.groq_client:
+            raise RuntimeError(
+                "GROQ_API_KEY is missing. Groq fallback is unavailable."
+            )
+
+        response = self.groq_client.chat.completions.create(
+            model=self.groq_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_instruction,
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            temperature=0.2,
+            max_completion_tokens=1024,
+        )
+
+        answer = (
+            response.choices[0].message.content or ""
+        ).strip()
+
+        if not answer:
+            raise ValueError(
+                "Groq returned an empty response."
+            )
+
+        return answer
 
     def respond(
         self,
@@ -81,7 +177,10 @@ class ResponseAgent:
                     f"{role.upper()}: {content[:1500]}"
                 )
 
-        history_text = "\n".join(history) or "No previous conversation."
+        history_text = (
+            "\n".join(history)
+            or "No previous conversation."
+        )
 
         system_instruction = """
 You are an intelligent document-grounded AI assistant.
@@ -112,41 +211,35 @@ Use conversation history only to understand references.
 Include appropriate source citations.
 """
 
+        provider = "Gemini"
+        used_model = self.model
+
         try:
-            response = None
+            # Attempt primary provider first.
+            try:
+                answer = self._generate_gemini(
+                    prompt,
+                    system_instruction
+                )
 
-            # Retry temporary Gemini server failures.
-            for attempt in range(3):
-                try:
-                    response = self.client.models.generate_content(
-                        model=self.model,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_instruction,
-                            temperature=0.2,
-                            max_output_tokens=1024,
-                        ),
-                    )
-                    break
+            except Exception as gemini_error:
+                logger.warning(
+                    "Gemini failed. Switching to Groq fallback. "
+                    "Error: %s",
+                    gemini_error,
+                )
 
-                except errors.ServerError:
-                    if attempt == 2:
-                        raise
+                # Automatic fallback to Groq.
+                answer = self._generate_groq(
+                    prompt,
+                    system_instruction
+                )
 
-                    wait_seconds = 2 ** (attempt + 1)
-                    logger.warning(
-                        "Gemini server unavailable. "
-                        "Retrying in %s seconds (attempt %s/3).",
-                        wait_seconds,
-                        attempt + 1,
-                    )
-                    time.sleep(wait_seconds)
+                provider = "Groq"
+                used_model = self.groq_model
 
-            answer = (response.text or "").strip() if response else ""
-
-            if not answer:
-                raise ValueError(
-                    "Gemini returned an empty response."
+                logger.info(
+                    "Groq fallback generated the response successfully."
                 )
 
             source_lines = [
@@ -156,7 +249,10 @@ Include appropriate source citations.
                 for item in source_metadata
             ]
 
-            answer += "\n\nSources:\n" + "\n".join(source_lines)
+            answer += (
+                "\n\nSources:\n"
+                + "\n".join(source_lines)
+            )
 
             best_score = max(
                 (item["score"] for item in source_metadata),
@@ -169,23 +265,23 @@ Include appropriate source citations.
                 "confidence": round(
                     max(0.0, min(1.0, best_score)), 4
                 ),
-                "model": self.model,
-                "provider": "Gemini",
+                "model": used_model,
+                "provider": provider,
             }
 
         except Exception as exc:
             logger.exception(
-                "Gemini response generation failed"
+                "Both Gemini and Groq response generation failed."
             )
 
             return {
                 "answer": (
-                    "Gemini could not generate an answer. "
-                    "Please try again shortly."
+                    "Both Gemini and Groq could not generate "
+                    "an answer right now. Please try again shortly."
                 ),
                 "sources": source_metadata,
                 "confidence": 0.0,
                 "generation_error": str(exc),
-                "model": self.model,
-                "provider": "Gemini",
+                "model": used_model,
+                "provider": provider,
             }
